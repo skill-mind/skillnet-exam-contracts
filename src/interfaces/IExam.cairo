@@ -43,8 +43,8 @@ pub trait IExam<TContractState> {
     // Toggles an exam's active status
     fn toggle_exam_status(ref self: TContractState, exam_id: u256);
 
-    fn processExamPayment(
-        ref self: TContractState, exam_id: u256, student_id: u256, isPaid: bool,
+    fn student_have_nft(
+        ref self: TContractState, student: ContractAddress, exam_id: u256, nft_contract_address: ContractAddress,
     ) -> bool;
 
     fn upload_student_score(
@@ -59,17 +59,11 @@ pub trait IExam<TContractState> {
     fn claim_certificate(ref self: TContractState, exam_id: u256);
 
     fn is_result_result(ref self: TContractState, exam_id: u256);
-}
-// FUNCTION processExamPayment(examID, institutionID, studentID, isPaid)
-//     IF isPaid == FALSE THEN
-//         DEBIT institutionID FOR examCost FROM institutionAccount
-//     ELSE
-//         studentPayment = blockchain.getPayment(studentID, examID)
-//         skillnetRevenue = studentPayment * 0.10
-//         institutionRevenue = studentPayment - skillnetRevenue
-//         SEND skillnetRevenue TO skillnetRevenueAccount
-//         SEND institutionRevenue TO institutionAccount
 
-//     RETURN "Payment processed successfully"
+    fn collect_exam_fee(
+        ref self: TContractState, payer: ContractAddress, amount: u256,
+    );
+}
+
 
 

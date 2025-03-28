@@ -3,6 +3,14 @@ use starknet::ContractAddress;
 pub trait ISkillnetNft<TContractState> {
     // NFT contract
     fn mint(ref self: TContractState, recipient: ContractAddress, token_id: u256);
+    fn balanceOf(ref self: TContractState, owner: ContractAddress) -> u256;
+}
+#[starknet::interface] // interface of GidaToken
+pub trait IERC20<TContractState> {
+    fn mint(ref self: TContractState, amount: u256);
+    fn transfer_from(
+        ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256,
+    );
 }
 
 #[starknet::contract]
@@ -11,11 +19,14 @@ pub mod Exam {
     // oz imports
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
-    use starknet::storage::{Map, MutableVecTrait, Vec, VecTrait, StoragePointerReadAccess, StoragePointerWriteAccess};
+    use starknet::storage::{
+        Map, MutableVecTrait, StoragePointerReadAccess, StoragePointerWriteAccess, Vec, VecTrait,
+    };
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address};
     use crate::base::types::{Exam, ExamStats, Question, Student};
     use crate::interfaces::IExam::IExam;
     use super::ISkillnetNftDispatcherTrait;
+    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
     // Validator role
     const VALIDATOR_ROLE: felt252 = selector!("VALIDATOR_ROLE");
@@ -35,7 +46,7 @@ pub mod Exam {
     impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
 
     #[storage]
-   pub struct Storage {
+    pub struct Storage {
         exams: Map<u256, Exam>,
         next_exam_id: u256,
         next_question_id: Map<u256, u256>,
@@ -297,17 +308,37 @@ pub mod Exam {
             true
         }
 
+        fn collect_exam_fee(
+            ref self: ContractState, payer: ContractAddress, amount: u256,
+        ) { // TODO: Uncomment code after ERC20 implementation
+            let token = self.strk_token_address.read();
+            let recipient = self.skillnet_account.read();
+            let amt = amount * 1_000_000_000_000_000_000;
+            let _success = IERC20Dispatcher { contract_address: token }
+                .transfer_from(payer, recipient, amt);
+            assert(_success, 'token withdrawal fail...');
+        }
+
 
         fn is_result_result(ref self: ContractState, exam_id: u256) {
             self.scores_uploaded.read(exam_id);
         }
 
-        fn processExamPayment(
-            ref self: ContractState, exam_id: u256, student_id: u256, isPaid: bool,
+        fn student_have_nft(
+            ref self: ContractState, student: ContractAddress, exam_id: u256, nft_contract_address: ContractAddress,
         ) -> bool {
-            if (!isPaid) {
-                true;
+            // let nft_id = self.track_minted_nft_id.read((exam_id, nft_contract_address));
+
+            let nft_dispatcher = super::ISkillnetNftDispatcher {
+                contract_address: nft_contract_address,
+            };
+
+              let bal =  nft_dispatcher.balanceOf(student);
+                
+            if (bal == 0){
+                return false;
             }
+            
             true
         }
     }
@@ -330,15 +361,6 @@ pub mod Exam {
         }
 
 
-        fn collect_exam_fee(
-            ref self: ContractState, payer: ContractAddress, amount: u256,
-        ) { // TODO: Uncomment code after ERC20 implementation
-            let token = self.strk_token_address.read();
-            let recipient = self.skillnet_account.read();
-            let amt = amount * 1_000_000_000_000_000_000;
-            // let _success = IERC20Dispatcher { contract_address: token }
-        //     .transfer_from(payer, recipient, amt);
-        // assert(_success, 'token withdrawal fail...');
-        }
+        
     }
 }
