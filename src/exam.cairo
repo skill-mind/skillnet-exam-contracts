@@ -1,17 +1,6 @@
+use skillnet_exam::interfaces::ISkillnetNft::{ISkillnetNftDispatcher, ISkillnetNftDispatcherTrait};
 use starknet::ContractAddress;
-#[starknet::interface] // interface of GidaToken
-pub trait ISkillnetNft<TContractState> {
-    // NFT contract
-    fn mint(ref self: TContractState, recipient: ContractAddress, token_id: u256);
-    fn balanceOf(ref self: TContractState, owner: ContractAddress) -> u256;
-}
-#[starknet::interface] // interface of GidaToken
-pub trait IERC20<TContractState> {
-    fn mint(ref self: TContractState, amount: u256);
-    fn transfer_from(
-        ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256,
-    );
-}
+
 
 #[starknet::contract]
 pub mod Exam {
@@ -19,6 +8,7 @@ pub mod Exam {
     // oz imports
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
+    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
     use starknet::storage::{
         Map, MutableVecTrait, StoragePointerReadAccess, StoragePointerWriteAccess, Vec, VecTrait,
     };
@@ -26,7 +16,6 @@ pub mod Exam {
     use crate::base::types::{Exam, ExamStats, Question, Student};
     use crate::interfaces::IExam::IExam;
     use super::ISkillnetNftDispatcherTrait;
-    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
 
     // Validator role
     const VALIDATOR_ROLE: felt252 = selector!("VALIDATOR_ROLE");
@@ -117,8 +106,10 @@ pub mod Exam {
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState) {
+    fn constructor(ref self: ContractState, strk: ContractAddress, skill: ContractAddress) {
         self.next_exam_id.write(0_u256);
+        self.strk_token_address.write(strk);
+        self.skillnet_account.write(skill);
     }
 
     #[abi(embed_v0)]
@@ -325,7 +316,11 @@ pub mod Exam {
         }
 
         fn student_have_nft(
-            ref self: ContractState, student: ContractAddress, exam_id: u256, nft_contract_address: ContractAddress,
+            ref self: ContractState,
+            token_id: u256,
+            exam_id: u256,
+            nft_contract_address: ContractAddress,
+            student: ContractAddress,
         ) -> bool {
             // let nft_id = self.track_minted_nft_id.read((exam_id, nft_contract_address));
 
@@ -333,12 +328,24 @@ pub mod Exam {
                 contract_address: nft_contract_address,
             };
 
-              let bal =  nft_dispatcher.balanceOf(student);
-                
-            if (bal == 0){
+            let owner = nft_dispatcher.is_owner(token_id);
+
+            if (owner != student) {
                 return false;
             }
-            
+
+            true
+        }
+        fn mint(
+            ref self: ContractState,
+            nft_contract_address: ContractAddress,
+            student: ContractAddress,
+        ) -> bool {
+            let nft_dispatcher = super::ISkillnetNftDispatcher {
+                contract_address: nft_contract_address,
+            };
+
+            nft_dispatcher.mint(student, 0);
             true
         }
     }
@@ -359,8 +366,5 @@ pub mod Exam {
             let exam = self.exams.read(exam_id);
             assert(exam.is_active, 'EXAM_INACTIVE');
         }
-
-
-        
     }
 }

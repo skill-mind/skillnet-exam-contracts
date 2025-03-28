@@ -1,15 +1,27 @@
 use core::traits::Into;
 use skillnet_exam::interfaces::IExam::{IExamDispatcher, IExamDispatcherTrait};
+use skillnet_exam::interfaces::ISkillnetNft::{ISkillnetNftDispatcher, ISkillnetNftDispatcherTrait};
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
     stop_cheat_caller_address,
 };
-use starknet::ContractAddress;
+use starknet::{ContractAddress, contract_address_const};
 
-fn deploy() -> IExamDispatcher {
-    let contract_class = declare("Exam").unwrap().contract_class();
-    let (contract_address, _) = contract_class.deploy(@array![].into()).unwrap();
-    IExamDispatcher { contract_address }
+fn deploy() -> ISkillnetNftDispatcher {
+    // let nft_contract: ContractAddress = contract_address_const::<'nft_contract'>();
+    // let strk_contract: ContractAddress = contract_address_const::<'payment_contract'>();
+    // let skillnet_wallet: ContractAddress = contract_address_const::<'skillnet_wallet'>();
+
+    let nft_contract_class = declare("SkillnetNft").unwrap().contract_class();
+    let (contract_address, _) = nft_contract_class.deploy(@array![]).unwrap();
+    // ISkillnetNftDispatcher {nft_contract_address}
+
+    // let contract_class = declare("Exam").unwrap().contract_class();
+    // let (contract_address, _) = contract_class
+    //     .deploy(@array![strk_contract.into(), skillnet_wallet.into()].into())
+    //     .unwrap();
+
+    ISkillnetNftDispatcher { contract_address }
 }
 
 // #[test]
@@ -152,6 +164,42 @@ fn deploy() -> IExamDispatcher {
 // }
 
 #[test]
-fn test_successful_create_exam() {
-    assert(1 == 1, 'Wrong assertion');
+fn test_successful_deploy_nft() {
+    let contract = deploy();
+    let name = contract.get_name();
+    let symbol = contract.get_symbol();
+
+    let name1: ByteArray = "skill";
+    let sym: ByteArray = "SKN";
+
+    assert(name == name1, 'Name_NOT_FOUND');
+    assert(symbol == sym, 'Symbol');
+    println!("name: {}", name);
+    println!("symbol: {}", symbol);
+}
+
+#[test]
+fn test_successful_nft_mint() {
+    let contract = deploy();
+    let beneficiary: ContractAddress = contract_address_const::<'bene'>();
+
+    contract.mint(beneficiary, 0);
+
+    let owner = contract.is_owner(0);
+
+    assert(owner == beneficiary, 'mint error');
+}
+
+#[test]
+#[should_panic]
+fn test_successful_nft_mint_wrong_owner() {
+    let contract = deploy();
+    let beneficiary: ContractAddress = contract_address_const::<'bene'>();
+    let beneficiary1: ContractAddress = contract_address_const::<'busjne'>();
+
+    contract.mint(beneficiary, 0);
+
+    let owner = contract.is_owner(0);
+
+    assert(owner == beneficiary1, 'mint error');
 }

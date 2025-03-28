@@ -44,7 +44,11 @@ pub trait IExam<TContractState> {
     fn toggle_exam_status(ref self: TContractState, exam_id: u256);
 
     fn student_have_nft(
-        ref self: TContractState, student: ContractAddress, exam_id: u256, nft_contract_address: ContractAddress,
+        ref self: TContractState,
+        token_id: u256,
+        exam_id: u256,
+        nft_contract_address: ContractAddress,
+        student: ContractAddress,
     ) -> bool;
 
     fn upload_student_score(
@@ -55,15 +59,15 @@ pub trait IExam<TContractState> {
         passMark: u256,
     ) -> bool;
 
+    fn mint(
+        ref self: TContractState, nft_contract_address: ContractAddress, student: ContractAddress,
+    ) -> bool;
+
 
     fn claim_certificate(ref self: TContractState, exam_id: u256);
 
     fn is_result_result(ref self: TContractState, exam_id: u256);
 
-    fn collect_exam_fee(
-        ref self: TContractState, payer: ContractAddress, amount: u256,
-    );
+    fn collect_exam_fee(ref self: TContractState, payer: ContractAddress, amount: u256);
 }
-
-
 
