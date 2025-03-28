@@ -6,10 +6,12 @@ edition = "2023_11"
 
 [dependencies]
 starknet = ">=2.9.4"
+openzeppelin = "1.0.0"
 
 [dev-dependencies]
 snforge_std = "0.39.0"
 assert_macros = "^2.9.4"
+
 
 [[target.starknet-contract]]
 casm = true

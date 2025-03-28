@@ -6,7 +6,12 @@ use crate::base::types::{Exam, ExamStats, Question};
 pub trait IExam<TContractState> {
     // Creates a new exam and returns the created exam
     fn create_exam(
-        ref self: TContractState, title: ByteArray, duration: u64, is_active: bool,
+        ref self: TContractState,
+        title: ByteArray,
+        duration: u64,
+        is_active: bool,
+        is_paid: bool,
+        price: u256,
     ) -> Exam;
 
     // Adds a question to an exam and returns the question ID
@@ -37,4 +42,34 @@ pub trait IExam<TContractState> {
 
     // Toggles an exam's active status
     fn toggle_exam_status(ref self: TContractState, exam_id: u256);
+
+    fn processExamPayment(
+        ref self: TContractState, exam_id: u256, student_id: u256, isPaid: bool,
+    ) -> bool;
+
+    fn upload_student_score(
+        ref self: TContractState,
+        address: ContractAddress,
+        exam_id: u256,
+        score: u256,
+        passMark: u256,
+    ) -> bool;
+
+
+    fn claim_certificate(ref self: TContractState, exam_id: u256);
+
+    fn is_result_result(ref self: TContractState, exam_id: u256);
 }
+// FUNCTION processExamPayment(examID, institutionID, studentID, isPaid)
+//     IF isPaid == FALSE THEN
+//         DEBIT institutionID FOR examCost FROM institutionAccount
+//     ELSE
+//         studentPayment = blockchain.getPayment(studentID, examID)
+//         skillnetRevenue = studentPayment * 0.10
+//         institutionRevenue = studentPayment - skillnetRevenue
+//         SEND skillnetRevenue TO skillnetRevenueAccount
+//         SEND institutionRevenue TO institutionAccount
+
+//     RETURN "Payment processed successfully"
+
+

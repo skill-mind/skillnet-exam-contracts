@@ -1,19 +1,61 @@
+use starknet::ContractAddress;
+#[starknet::interface] // interface of GidaToken
+pub trait ISkillnetNft<TContractState> {
+    // NFT contract
+    fn mint(ref self: TContractState, recipient: ContractAddress, token_id: u256);
+}
+
 #[starknet::contract]
 pub mod Exam {
     use core::array::ArrayTrait;
-    use starknet::storage::{Map, StoragePointerReadAccess, StoragePointerWriteAccess};
-    use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
-    use crate::base::types::{Exam, ExamStats, Question};
+    // oz imports
+    use openzeppelin::access::accesscontrol::AccessControlComponent;
+    use openzeppelin::introspection::src5::SRC5Component;
+    use starknet::storage::{Map, MutableVecTrait, Vec, VecTrait, StoragePointerReadAccess, StoragePointerWriteAccess};
+    use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address};
+    use crate::base::types::{Exam, ExamStats, Question, Student};
     use crate::interfaces::IExam::IExam;
+    use super::ISkillnetNftDispatcherTrait;
+
+    // Validator role
+    const VALIDATOR_ROLE: felt252 = selector!("VALIDATOR_ROLE");
+
+    // components definition
+    component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
+    component!(path: SRC5Component, storage: src5, event: SRC5Event);
+
+    // AccessControl
+    #[abi(embed_v0)]
+    impl AccessControlImpl =
+        AccessControlComponent::AccessControlImpl<ContractState>;
+    impl AccessControlInternalImpl = AccessControlComponent::InternalImpl<ContractState>;
+
+    // SRC5
+    #[abi(embed_v0)]
+    impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
 
     #[storage]
-    struct Storage {
+   pub struct Storage {
         exams: Map<u256, Exam>,
         next_exam_id: u256,
         next_question_id: Map<u256, u256>,
         exam_questions: Map<(u256, u256), Question>,
         exam_enrollments: Map<(u256, ContractAddress), bool>,
         exam_stats: Map<u256, ExamStats>,
+        course_nft_contract_address: ContractAddress,
+        students_to_exam_scores: Map<(ContractAddress, u256), u256>,
+        #[substorage(v0)]
+        pub accesscontrol: AccessControlComponent::Storage,
+        #[substorage(v0)]
+        src5: SRC5Component::Storage,
+        validators: Vec<ContractAddress>,
+        students_passed: Map<(ContractAddress, u256), bool>,
+        //tracks all minted nft id minted by events
+        track_minted_nft_id: Map<(u256, ContractAddress), u256>,
+        scores_uploaded: Map<u256, bool>,
+        students: Student,
+        strk_token_address: ContractAddress,
+        skillnet_account: ContractAddress,
     }
 
     #[event]
@@ -23,6 +65,11 @@ pub mod Exam {
         QuestionAdded: QuestionAdded,
         StudentEnrolled: StudentEnrolled,
         ExamStatusChanged: ExamStatusChanged,
+        CourseCertClaimed: CourseCertClaimed,
+        #[flat]
+        AccessControlEvent: AccessControlComponent::Event,
+        #[flat]
+        SRC5Event: SRC5Component::Event,
     }
 
     #[derive(Drop, Serde, starknet::Event)]
@@ -35,6 +82,11 @@ pub mod Exam {
         is_active: bool,
     }
 
+    #[derive(starknet::Event, Clone, Debug, Drop)]
+    pub struct CourseCertClaimed {
+        pub course_identifier: u256,
+        pub candidate: ContractAddress,
+    }
     #[derive(Drop, Serde, starknet::Event)]
     struct QuestionAdded {
         exam_id: u256,
@@ -61,7 +113,12 @@ pub mod Exam {
     #[abi(embed_v0)]
     impl ExamImpl of IExam<ContractState> {
         fn create_exam(
-            ref self: ContractState, title: ByteArray, duration: u64, is_active: bool,
+            ref self: ContractState,
+            title: ByteArray,
+            duration: u64,
+            is_active: bool,
+            is_paid: bool,
+            price: u256,
         ) -> Exam {
             let creator = get_caller_address();
             let datetime = get_block_timestamp();
@@ -70,7 +127,14 @@ pub mod Exam {
             self.next_exam_id.write(exam_id + 1_u256);
 
             let exam = Exam {
-                exam_id, title: title.clone(), creator, datetime, duration, is_active,
+                exam_id,
+                title: title.clone(),
+                creator,
+                datetime,
+                duration,
+                is_active,
+                is_paid,
+                price,
             };
 
             self.exams.write(exam_id, exam);
@@ -141,6 +205,16 @@ pub mod Exam {
 
             let student = get_caller_address();
 
+            let exam = self.exams.read(exam_id);
+
+            let amount = exam.price;
+
+            if (exam.is_paid) {
+                self.collect_exam_fee(student, amount);
+            } else {
+                self.collect_exam_fee(get_contract_address(), amount);
+            }
+
             let already_enrolled = self.exam_enrollments.read((exam_id, student));
             assert(!already_enrolled, 'ALREADY_ENROLLED');
 
@@ -185,6 +259,57 @@ pub mod Exam {
             self.exams.write(exam_id, exam);
             self.emit(Event::ExamStatusChanged(ExamStatusChanged { exam_id, new_status }));
         }
+
+        fn claim_certificate(ref self: ContractState, exam_id: u256) {
+            let student = get_caller_address();
+            let eligible = self.students_passed.read((student, exam_id));
+
+            if (eligible) {
+                let nft_contract_address = self.course_nft_contract_address.read();
+
+                let nft_dispatcher = super::ISkillnetNftDispatcher {
+                    contract_address: nft_contract_address,
+                };
+
+                let nft_id = self.track_minted_nft_id.read((exam_id, nft_contract_address));
+
+                nft_dispatcher.mint(get_caller_address(), nft_id);
+                self.track_minted_nft_id.write((exam_id, nft_contract_address), nft_id + 1);
+            } else {
+                return;
+            }
+            self.emit(CourseCertClaimed { course_identifier: exam_id, candidate: student });
+        }
+
+        fn upload_student_score(
+            ref self: ContractState,
+            address: ContractAddress,
+            exam_id: u256,
+            score: u256,
+            passMark: u256,
+        ) -> bool {
+            // Ensure is admin
+            if (score > passMark) {
+                self.students_passed.write((address, exam_id), true);
+            }
+            self.students_to_exam_scores.write((address, exam_id), score);
+            self.scores_uploaded.write(exam_id, true);
+            true
+        }
+
+
+        fn is_result_result(ref self: ContractState, exam_id: u256) {
+            self.scores_uploaded.read(exam_id);
+        }
+
+        fn processExamPayment(
+            ref self: ContractState, exam_id: u256, student_id: u256, isPaid: bool,
+        ) -> bool {
+            if (!isPaid) {
+                true;
+            }
+            true
+        }
     }
 
     #[generate_trait]
@@ -202,6 +327,18 @@ pub mod Exam {
         fn assert_exam_active(self: @ContractState, exam_id: u256) {
             let exam = self.exams.read(exam_id);
             assert(exam.is_active, 'EXAM_INACTIVE');
+        }
+
+
+        fn collect_exam_fee(
+            ref self: ContractState, payer: ContractAddress, amount: u256,
+        ) { // TODO: Uncomment code after ERC20 implementation
+            let token = self.strk_token_address.read();
+            let recipient = self.skillnet_account.read();
+            let amt = amount * 1_000_000_000_000_000_000;
+            // let _success = IERC20Dispatcher { contract_address: token }
+        //     .transfer_from(payer, recipient, amt);
+        // assert(_success, 'token withdrawal fail...');
         }
     }
 }
