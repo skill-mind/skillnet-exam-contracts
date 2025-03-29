@@ -1,7 +1,7 @@
 use starknet::ContractAddress;
 use crate::base::types::{Exam, ExamStats, Question};
 
-#[starknet::interface]
+
 #[starknet::interface]
 pub trait IExam<TContractState> {
     // Creates a new exam and returns the created exam
@@ -57,10 +57,6 @@ pub trait IExam<TContractState> {
         exam_id: u256,
         score: u256,
         passMark: u256,
-    ) -> bool;
-
-    fn mint(
-        ref self: TContractState, nft_contract_address: ContractAddress, student: ContractAddress,
     ) -> bool;
 
 

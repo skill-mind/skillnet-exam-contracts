@@ -1,5 +1,5 @@
-use core::traits::Into;
 use skillnet_exam::interfaces::IExam::{IExamDispatcher, IExamDispatcherTrait};
+use skillnet_exam::interfaces::IMockUsdc::{IMockUsdcDispatcher, IMockUsdcDispatcherTrait};
 use skillnet_exam::interfaces::ISkillnetNft::{ISkillnetNftDispatcher, ISkillnetNftDispatcherTrait};
 use snforge_std::{
     ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
@@ -7,19 +7,35 @@ use snforge_std::{
 };
 use starknet::{ContractAddress, contract_address_const};
 
-fn deploy() -> ISkillnetNftDispatcher {
-    // let nft_contract: ContractAddress = contract_address_const::<'nft_contract'>();
-    // let strk_contract: ContractAddress = contract_address_const::<'payment_contract'>();
-    // let skillnet_wallet: ContractAddress = contract_address_const::<'skillnet_wallet'>();
+fn deploy() -> IExamDispatcher {
+    let nft_contract = deploy_nft();
+    let nft_address = nft_contract.contract_address;
 
+    let erc20_contract = deploy_nft();
+    let erc20_address = erc20_contract.contract_address;
+
+    let skillnet_account: ContractAddress = contract_address_const::<'skillnet_account'>();
+
+    let contract_class = declare("Exam").unwrap().contract_class();
+    let (contract_address, _) = contract_class
+        .deploy(@array![erc20_address.into(), skillnet_account.into(), nft_address.into()].into())
+        .unwrap();
+
+    IExamDispatcher { contract_address }
+}
+
+fn deploy_erc20() -> IMockUsdcDispatcher {
+    let owner: ContractAddress = contract_address_const::<'owner'>();
+
+    let contract_class = declare("MockUsdc").unwrap().contract_class();
+    let (contract_address, _) = contract_class.deploy(@array![owner.into()]).unwrap();
+
+    IMockUsdcDispatcher { contract_address }
+}
+
+fn deploy_nft() -> ISkillnetNftDispatcher {
     let nft_contract_class = declare("SkillnetNft").unwrap().contract_class();
     let (contract_address, _) = nft_contract_class.deploy(@array![]).unwrap();
-    // ISkillnetNftDispatcher {nft_contract_address}
-
-    // let contract_class = declare("Exam").unwrap().contract_class();
-    // let (contract_address, _) = contract_class
-    //     .deploy(@array![strk_contract.into(), skillnet_wallet.into()].into())
-    //     .unwrap();
 
     ISkillnetNftDispatcher { contract_address }
 }
@@ -165,7 +181,7 @@ fn deploy() -> ISkillnetNftDispatcher {
 
 #[test]
 fn test_successful_deploy_nft() {
-    let contract = deploy();
+    let contract = deploy_nft();
     let name = contract.get_name();
     let symbol = contract.get_symbol();
 
@@ -180,7 +196,8 @@ fn test_successful_deploy_nft() {
 
 #[test]
 fn test_successful_nft_mint() {
-    let contract = deploy();
+    let contract = deploy_nft();
+    let address = contract.contract_address;
     let beneficiary: ContractAddress = contract_address_const::<'bene'>();
 
     contract.mint(beneficiary, 0);
@@ -193,7 +210,7 @@ fn test_successful_nft_mint() {
 #[test]
 #[should_panic]
 fn test_successful_nft_mint_wrong_owner() {
-    let contract = deploy();
+    let contract = deploy_nft();
     let beneficiary: ContractAddress = contract_address_const::<'bene'>();
     let beneficiary1: ContractAddress = contract_address_const::<'busjne'>();
 
@@ -202,4 +219,19 @@ fn test_successful_nft_mint_wrong_owner() {
     let owner = contract.is_owner(0);
 
     assert(owner == beneficiary1, 'mint error');
+}
+
+#[test]
+fn test_successful_deploy_MockUSDC() {
+    let contract = deploy();
+    let name = contract.get_name();
+    let symbol = contract.get_symbol();
+
+    // let name1: ByteArray = "USDC";
+    // let sym: ByteArray = "USDC";
+
+    // assert(name == name1, 'Name_NOT_FOUND');
+    // assert(symbol == sym, 'Symbol');
+    println!("name: {}", name);
+    println!("symbol: {}", symbol);
 }

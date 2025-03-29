@@ -2,8 +2,18 @@
 use starknet::ContractAddress;
 
 #[starknet::interface]
-trait IExternal<ContractState> {
+trait IMockUsdc<ContractState> {
     fn mint(ref self: ContractState, recipient: ContractAddress, amount: u256);
+    fn get_balance(ref self: ContractState, address: ContractAddress) -> u256;
+    fn transferFrom(
+        ref self: ContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256,
+    );
+    fn get_symbol(ref self: ContractState) -> ByteArray;
+    fn get_name(ref self: ContractState) -> ByteArray;
+    fn get_allowance(
+        ref self: ContractState, owner: ContractAddress, spender: ContractAddress,
+    ) -> u256;
+    fn approve_user(ref self: ContractState, spender: ContractAddress, amount: u256);
 }
 
 #[starknet::contract]
@@ -45,17 +55,52 @@ pub mod MockUsdc {
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, recipient: ContractAddress, owner: ContractAddress) {
+    fn constructor(ref self: ContractState, owner: ContractAddress) {
         self.erc20.initializer(format!("USDC"), format!("USDC"));
         self.ownable.initializer(owner);
 
-        self.erc20.mint(recipient, core::num::traits::Bounded::<u256>::MAX);
+        self.erc20.mint(owner, core::num::traits::Bounded::<u256>::MAX);
     }
 
     #[abi(embed_v0)]
-    impl ExternalImpl of super::IExternal<ContractState> {
+    impl ExternalImpl of super::IMockUsdc<ContractState> {
         fn mint(ref self: ContractState, recipient: ContractAddress, amount: u256) {
             self.erc20.mint(recipient, amount);
+        }
+
+        fn get_balance(ref self: ContractState, address: ContractAddress) -> u256 {
+            let balance = self.erc20.balance_of(address);
+            balance
+        }
+
+        fn transferFrom(
+            ref self: ContractState,
+            sender: ContractAddress,
+            recipient: ContractAddress,
+            amount: u256,
+        ) {
+            self.erc20.transfer_from(sender, recipient, amount);
+        }
+
+        fn approve_user(ref self: ContractState, spender: ContractAddress, amount: u256) {
+            self.erc20.approve(spender, amount);
+        }
+
+        fn get_allowance(
+            ref self: ContractState, owner: ContractAddress, spender: ContractAddress,
+        ) -> u256 {
+            let allowed_amount = self.erc20.allowance(owner, spender);
+            allowed_amount
+        }
+
+        fn get_name(ref self: ContractState) -> ByteArray {
+            let name = self.erc20.name();
+            name
+        }
+
+        fn get_symbol(ref self: ContractState) -> ByteArray {
+            let symbol = self.erc20.symbol();
+            symbol
         }
     }
 }

@@ -1,7 +1,7 @@
 use starknet::ContractAddress;
 
 #[starknet::interface]
-pub trait IERC20<TContractState> {
+pub trait IMockUsdc<ContractState> {
     fn mint(ref self: ContractState, recipient: ContractAddress, amount: u256);
     fn get_balance(ref self: ContractState, address: ContractAddress) -> u256;
     fn transferFrom(
