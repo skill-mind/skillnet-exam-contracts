@@ -312,6 +312,11 @@ pub mod Exam {
 
             true
         }
+        fn get_addresses(ref self: ContractState) -> (ContractAddress, ContractAddress) {
+            let erc_20 = self.strk_token_address.read();
+            let nft = self.nft_contract_address.read();
+            (erc_20, nft)
+        }
     }
 
     #[generate_trait]

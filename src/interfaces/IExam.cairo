@@ -65,5 +65,6 @@ pub trait IExam<TContractState> {
     fn is_result_result(ref self: TContractState, exam_id: u256);
 
     fn collect_exam_fee(ref self: TContractState, payer: ContractAddress, amount: u256);
+    fn get_addresses(ref self: TContractState) -> (ContractAddress, ContractAddress);
 }
 

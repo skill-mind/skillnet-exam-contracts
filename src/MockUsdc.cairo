@@ -20,7 +20,7 @@ trait IMockUsdc<ContractState> {
 pub mod MockUsdc {
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
-    use starknet::ContractAddress;
+    use starknet::{ContractAddress, get_caller_address, get_contract_address};
 
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
@@ -59,7 +59,7 @@ pub mod MockUsdc {
         self.erc20.initializer(format!("USDC"), format!("USDC"));
         self.ownable.initializer(owner);
 
-        self.erc20.mint(owner, core::num::traits::Bounded::<u256>::MAX);
+        self.erc20.mint(owner, 1000000_u256);
     }
 
     #[abi(embed_v0)]
@@ -79,7 +79,7 @@ pub mod MockUsdc {
             recipient: ContractAddress,
             amount: u256,
         ) {
-            self.erc20.transfer_from(sender, recipient, amount);
+            self.erc20.transfer(recipient, amount);
         }
 
         fn approve_user(ref self: ContractState, spender: ContractAddress, amount: u256) {

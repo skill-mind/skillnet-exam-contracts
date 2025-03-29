@@ -2,16 +2,16 @@ use skillnet_exam::interfaces::IExam::{IExamDispatcher, IExamDispatcherTrait};
 use skillnet_exam::interfaces::IMockUsdc::{IMockUsdcDispatcher, IMockUsdcDispatcherTrait};
 use skillnet_exam::interfaces::ISkillnetNft::{ISkillnetNftDispatcher, ISkillnetNftDispatcherTrait};
 use snforge_std::{
-    ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
-    stop_cheat_caller_address,
+    CheatSpan, ContractClassTrait, DeclareResultTrait, cheat_caller_address, declare,
+    start_cheat_caller_address, stop_cheat_caller_address,
 };
 use starknet::{ContractAddress, contract_address_const};
 
-fn deploy() -> IExamDispatcher {
+fn deploy() -> (IExamDispatcher, ContractAddress, ContractAddress) {
     let nft_contract = deploy_nft();
     let nft_address = nft_contract.contract_address;
 
-    let erc20_contract = deploy_nft();
+    let erc20_contract = deploy_erc20();
     let erc20_address = erc20_contract.contract_address;
 
     let skillnet_account: ContractAddress = contract_address_const::<'skillnet_account'>();
@@ -21,7 +21,7 @@ fn deploy() -> IExamDispatcher {
         .deploy(@array![erc20_address.into(), skillnet_account.into(), nft_address.into()].into())
         .unwrap();
 
-    IExamDispatcher { contract_address }
+    (IExamDispatcher { contract_address }, erc20_address, nft_address)
 }
 
 fn deploy_erc20() -> IMockUsdcDispatcher {
@@ -38,6 +38,17 @@ fn deploy_nft() -> ISkillnetNftDispatcher {
     let (contract_address, _) = nft_contract_class.deploy(@array![]).unwrap();
 
     ISkillnetNftDispatcher { contract_address }
+}
+
+
+#[test]
+fn test_successful_exam_deployment() {
+    let (contract, erc20_address, nft_address) = deploy();
+
+    let (erc20, nft) = contract.get_addresses();
+
+    assert(erc20 == erc20_address, 'ERC20 Error');
+    assert(nft == nft_address, 'NFT Error');
 }
 
 // #[test]
@@ -197,7 +208,7 @@ fn test_successful_deploy_nft() {
 #[test]
 fn test_successful_nft_mint() {
     let contract = deploy_nft();
-    let address = contract.contract_address;
+
     let beneficiary: ContractAddress = contract_address_const::<'bene'>();
 
     contract.mint(beneficiary, 0);
@@ -223,15 +234,32 @@ fn test_successful_nft_mint_wrong_owner() {
 
 #[test]
 fn test_successful_deploy_MockUSDC() {
-    let contract = deploy();
+    let contract = deploy_erc20();
     let name = contract.get_name();
     let symbol = contract.get_symbol();
 
-    // let name1: ByteArray = "USDC";
-    // let sym: ByteArray = "USDC";
-
-    // assert(name == name1, 'Name_NOT_FOUND');
-    // assert(symbol == sym, 'Symbol');
     println!("name: {}", name);
     println!("symbol: {}", symbol);
 }
+
+#[test]
+fn test_successful_erc20_mint() {
+    let contract = deploy_erc20();
+    let erc20_address = contract.contract_address;
+    let owner: ContractAddress = contract_address_const::<'owner'>();
+
+    let beneficiary: ContractAddress = contract_address_const::<'bene'>();
+
+    let amount = 1_u256;
+    let owner_bal = contract.get_balance(beneficiary);
+    // contract.approve_user(erc20_address, 100000);
+    cheat_caller_address(erc20_address, owner, CheatSpan::Indefinite);
+    contract.mint(beneficiary, amount);
+
+    let owner_bal_after = contract.get_balance(beneficiary);
+
+    println!("beneficiary: {}", owner_bal);
+    println!("beneficiary: {}", owner_bal_after);
+    assert(owner_bal < owner_bal_after, 'mint error');
+}
+
