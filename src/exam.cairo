@@ -187,10 +187,16 @@ pub mod Exam {
 
             let amount = exam.price;
 
+            let skillnet_revenue = self.skillnet_account.read();
             if (exam.is_paid) {
-                self.collect_exam_fee(student, amount);
+                let commision = amount / 10;
+
+                let exam_fee = amount - commision;
+
+                self.collect_exam_fee(get_caller_address(), exam_fee, get_contract_address());
+                self.collect_exam_fee(get_caller_address(), commision, skillnet_revenue);
             } else {
-                self.collect_exam_fee(get_contract_address(), amount);
+                self.collect_exam_fee(get_contract_address(), amount, skillnet_revenue);
             }
 
             let already_enrolled = self.exam_enrollments.read((exam_id, student));
@@ -276,21 +282,27 @@ pub mod Exam {
         }
 
         fn collect_exam_fee(
-            ref self: ContractState, payer: ContractAddress, amount: u256,
+            ref self: ContractState,
+            payer: ContractAddress,
+            amount: u256,
+            recipient: ContractAddress,
         ) { // TODO: Uncomment code after ERC20 implementation
             let token = self.strk_token_address.read();
-            let recipient = self.skillnet_account.read();
-            let amt = amount * 1_000_000_000_000_000_000;
+
             let erc20_dispatcher = super::IMockUsdcDispatcher { contract_address: token };
-            let user_bal = erc20_dispatcher.get_balance(recipient);
+            erc20_dispatcher.approve_user(get_contract_address(), amount);
+            let contract_allowance = erc20_dispatcher.get_allowance(payer, get_contract_address());
+            assert(contract_allowance >= amount, 'INSUFFICIENT_ALLOWANCE');
+            let user_bal = erc20_dispatcher.get_balance(payer);
             assert(user_bal >= amount, 'Insufficient funds');
-            let _success = erc20_dispatcher.transferFrom(payer, recipient, amt);
+            let _success = erc20_dispatcher.transferFrom(payer, recipient, amount);
             assert(_success, 'token withdrawal fail...');
         }
 
 
-        fn is_result_result(ref self: ContractState, exam_id: u256) {
-            self.scores_uploaded.read(exam_id);
+        fn is_result_out(ref self: ContractState, exam_id: u256) -> bool {
+            let suc = self.scores_uploaded.read(exam_id);
+            suc
         }
 
         fn student_have_nft(

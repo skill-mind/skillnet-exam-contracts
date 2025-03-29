@@ -62,9 +62,11 @@ pub trait IExam<TContractState> {
 
     fn claim_certificate(ref self: TContractState, exam_id: u256);
 
-    fn is_result_result(ref self: TContractState, exam_id: u256);
+    fn is_result_out(ref self: TContractState, exam_id: u256) -> bool;
 
-    fn collect_exam_fee(ref self: TContractState, payer: ContractAddress, amount: u256);
+    fn collect_exam_fee(
+        ref self: TContractState, payer: ContractAddress, amount: u256, recipient: ContractAddress,
+    );
     fn get_addresses(ref self: TContractState) -> (ContractAddress, ContractAddress);
 }
 

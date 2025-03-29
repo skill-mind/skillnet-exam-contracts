@@ -7,7 +7,7 @@ trait IMockUsdc<ContractState> {
     fn get_balance(ref self: ContractState, address: ContractAddress) -> u256;
     fn transferFrom(
         ref self: ContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256,
-    );
+    ) -> bool;
     fn get_symbol(ref self: ContractState) -> ByteArray;
     fn get_name(ref self: ContractState) -> ByteArray;
     fn get_allowance(
@@ -20,7 +20,7 @@ trait IMockUsdc<ContractState> {
 pub mod MockUsdc {
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
-    use starknet::{ContractAddress, get_caller_address, get_contract_address};
+    use starknet::ContractAddress;
 
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
     component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
@@ -78,8 +78,9 @@ pub mod MockUsdc {
             sender: ContractAddress,
             recipient: ContractAddress,
             amount: u256,
-        ) {
-            self.erc20.transfer(recipient, amount);
+        ) -> bool {
+            let success = self.erc20.transfer_from(sender, recipient, amount);
+            success
         }
 
         fn approve_user(ref self: ContractState, spender: ContractAddress, amount: u256) {
