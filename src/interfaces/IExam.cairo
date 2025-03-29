@@ -1,12 +1,17 @@
 use starknet::ContractAddress;
 use crate::base::types::{Exam, ExamStats, Question};
 
-#[starknet::interface]
+
 #[starknet::interface]
 pub trait IExam<TContractState> {
     // Creates a new exam and returns the created exam
     fn create_exam(
-        ref self: TContractState, title: ByteArray, duration: u64, is_active: bool,
+        ref self: TContractState,
+        title: ByteArray,
+        duration: u64,
+        is_active: bool,
+        is_paid: bool,
+        price: u256,
     ) -> Exam;
 
     // Adds a question to an exam and returns the question ID
@@ -37,4 +42,31 @@ pub trait IExam<TContractState> {
 
     // Toggles an exam's active status
     fn toggle_exam_status(ref self: TContractState, exam_id: u256);
+
+    fn student_have_nft(
+        ref self: TContractState,
+        token_id: u256,
+        exam_id: u256,
+        nft_contract_address: ContractAddress,
+        student: ContractAddress,
+    ) -> bool;
+
+    fn upload_student_score(
+        ref self: TContractState,
+        address: ContractAddress,
+        exam_id: u256,
+        score: u256,
+        passMark: u256,
+    ) -> bool;
+
+
+    fn claim_certificate(ref self: TContractState, exam_id: u256);
+
+    fn is_result_out(ref self: TContractState, exam_id: u256) -> bool;
+
+    fn collect_exam_fee(
+        ref self: TContractState, payer: ContractAddress, amount: u256, recipient: ContractAddress,
+    );
+    fn get_addresses(ref self: TContractState) -> (ContractAddress, ContractAddress);
 }
+
