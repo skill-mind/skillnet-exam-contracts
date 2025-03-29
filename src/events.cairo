@@ -5,6 +5,11 @@ enum Event {
     QuestionAdded: QuestionAdded,
     StudentEnrolled: StudentEnrolled,
     ExamStatusChanged: ExamStatusChanged,
+    CourseCertClaimed: CourseCertClaimed,
+    #[flat]
+    AccessControlEvent: AccessControlComponent::Event,
+    #[flat]
+    SRC5Event: SRC5Component::Event,
 }
 
 #[derive(Drop, Serde, starknet::Event)]
@@ -38,3 +43,4 @@ pub struct ExamStatusChanged {
     exam_id: u256,
     new_status: bool,
 }
+

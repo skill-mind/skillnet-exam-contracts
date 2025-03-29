@@ -8,6 +8,8 @@ pub struct Exam {
     pub datetime: u64,
     pub duration: u64,
     pub is_active: bool,
+    pub is_paid: bool,
+    pub price: u256,
 }
 
 #[derive(Drop, Serde, starknet::Store)]
@@ -26,4 +28,11 @@ pub struct Question {
 pub struct ExamStats {
     pub total_questions: u256,
     pub total_students: u256,
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+pub struct Student {
+    address: ContractAddress,
+    exam_Id: u256,
+    is_registered: bool,
 }
