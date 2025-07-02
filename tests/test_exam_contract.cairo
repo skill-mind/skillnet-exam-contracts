@@ -102,16 +102,14 @@ fn test_successful_incorrect_create_paid_exam() {
 }
 
 #[test]
-fn test_add_and_get_question() {
+fn test_add_and_get_questions() {
     let (contract, _, _) = deploy();
     contract.create_exam("Science", 90_u64, true, false, 0);
 
-    let question_id = contract
-        .add_question(0_u256, "What is H2O?", "Water", "Gold", "Oxygen", "Hydrogen", 1_u8);
+    let question_id = contract.add_questions(0_u256, "123456");
 
-    let question = contract.get_question(0_u256, question_id);
-    assert(question.question == "What is H2O?", 'QUESTION_TEXT_MISMATCH');
-    assert(question.correct_option == 1_u8, 'CORRECT_OPTION_MISMATCH');
+    let question = contract.get_questions(0_u256);
+    assert(question == "123456", 'QUESTIONS_MISMATCH');
 }
 
 #[test]
@@ -332,34 +330,9 @@ fn test_add_question_to_inactive_exam() {
     contract.create_exam("Biology", 30_u64, false, false, 0);
 
     // This should panic
-    contract.add_question(0_u256, "Question?", "A", "B", "C", "D", 1_u8);
+    contract.add_questions(0_u256, "123456");
 
     stop_cheat_caller_address(creator);
-}
-
-#[test]
-fn test_multiple_questions_stats() {
-    let (contract, _, _) = deploy();
-    contract.create_exam("Computer Science", 120_u64, true, false, 0);
-
-    // Add 3 questions
-    contract.add_question(0_u256, "Q1", "A1", "B1", "C1", "D1", 1_u8);
-    contract.add_question(0_u256, "Q2", "A2", "B2", "C2", "D2", 2_u8);
-    contract.add_question(0_u256, "Q3", "A3", "B3", "C3", "D3", 3_u8);
-
-    let stats = contract.get_exam_stats(0_u256);
-    assert(stats.total_questions == 3_u256, 'SHOULD_HAVE_3_QUESTIONS');
-}
-
-#[test]
-#[should_panic]
-fn test_invalid_correct_option() {
-    let (contract, _, _) = deploy();
-    contract.create_exam("Geography", 40_u64, true, false, 0);
-
-    // This should panic (correct_option must be 1-4)
-    contract
-        .add_question(0_u256, "Capital of France?", "London", "Berlin", "Paris", "Madrid", 5_u8);
 }
 
 #[test]

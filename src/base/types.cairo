@@ -13,20 +13,14 @@ pub struct Exam {
 }
 
 #[derive(Drop, Serde, starknet::Store)]
-pub struct Question {
+pub struct Questions {
     pub exam_id: u256,
-    pub question_id: u256,
-    pub question: ByteArray,
-    pub option_a: ByteArray,
-    pub option_b: ByteArray,
-    pub option_c: ByteArray,
-    pub option_d: ByteArray,
-    pub correct_option: u8,
+    pub questions_uri: ByteArray,
 }
 
 #[derive(Drop, Serde, starknet::Store)]
 pub struct ExamStats {
-    pub total_questions: u256,
+    pub questions_uri: ByteArray,
     pub total_students: u256,
 }
 

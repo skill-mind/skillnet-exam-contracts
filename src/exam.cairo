@@ -7,7 +7,7 @@ pub mod Exam {
     use core::array::ArrayTrait;
     use starknet::storage::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, Vec};
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address};
-    use crate::base::types::{Exam, ExamStats, Question, Student};
+    use crate::base::types::{Exam, ExamStats, Questions, Student};
     use crate::interfaces::IExam::IExam;
     use super::{IMockUsdcDispatcherTrait, ISkillnetNftDispatcherTrait};
 
@@ -17,7 +17,7 @@ pub mod Exam {
         exams: Map<u256, Exam>,
         next_exam_id: u256,
         next_question_id: Map<u256, u256>,
-        exam_questions: Map<(u256, u256), Question>,
+        exam_questions: Map<u256, Questions>,
         exam_enrollments: Map<(u256, ContractAddress), bool>,
         exam_stats: Map<u256, ExamStats>,
         nft_contract_address: ContractAddress,
@@ -36,7 +36,7 @@ pub mod Exam {
     #[derive(Drop, starknet::Event)]
     enum Event {
         ExamCreated: ExamCreated,
-        QuestionAdded: QuestionAdded,
+        QuestionsAdded: QuestionsAdded,
         StudentEnrolled: StudentEnrolled,
         ExamStatusChanged: ExamStatusChanged,
         CourseCertClaimed: CourseCertClaimed,
@@ -58,9 +58,8 @@ pub mod Exam {
         pub candidate: ContractAddress,
     }
     #[derive(Drop, Serde, starknet::Event)]
-    struct QuestionAdded {
+    struct QuestionsAdded {
         exam_id: u256,
-        question_id: u256,
     }
 
     #[derive(Drop, Serde, starknet::Event)]
@@ -118,7 +117,7 @@ pub mod Exam {
             self.exams.write(exam_id, exam);
             self
                 .exam_stats
-                .write(exam_id, ExamStats { total_questions: 0_u256, total_students: 0_u256 });
+                .write(exam_id, ExamStats { questions_uri: "0", total_students: 0_u256 });
 
             self.next_question_id.write(exam_id, 0_u256);
 
@@ -134,47 +133,22 @@ pub mod Exam {
             exam_data
         }
 
-        fn add_question(
-            ref self: ContractState,
-            exam_id: u256,
-            question: ByteArray,
-            option_a: ByteArray,
-            option_b: ByteArray,
-            option_c: ByteArray,
-            option_d: ByteArray,
-            correct_option: u8,
-        ) -> u256 {
-            assert(correct_option >= 1_u8 && correct_option <= 4_u8, 'INVALID_OPTION');
-
+        fn add_questions(ref self: ContractState, exam_id: u256, questions_uri: ByteArray) {
             self.assert_exam_exists(exam_id);
             self.assert_exam_active(exam_id);
 
             let creator = get_caller_address();
             self.assert_is_exam_creator(exam_id, creator);
 
-            let question_id = self.next_question_id.read(exam_id);
-            self.next_question_id.write(exam_id, question_id + 1_u256);
+            let question_data = Questions { exam_id, questions_uri: questions_uri.clone() };
 
-            let question_data = Question {
-                exam_id,
-                question_id,
-                question,
-                option_a,
-                option_b,
-                option_c,
-                option_d,
-                correct_option,
-            };
-
-            self.exam_questions.write((exam_id, question_id), question_data);
+            self.exam_questions.write(exam_id, question_data);
 
             let mut stats = self.exam_stats.read(exam_id);
-            stats.total_questions += 1_u256;
+            stats.questions_uri = questions_uri;
             self.exam_stats.write(exam_id, stats);
 
-            self.emit(Event::QuestionAdded(QuestionAdded { exam_id, question_id }));
-
-            question_id
+            self.emit(Event::QuestionsAdded(QuestionsAdded { exam_id }));
         }
 
         fn enroll_in_exam(ref self: ContractState, exam_id: u256) {
@@ -221,9 +195,9 @@ pub mod Exam {
             self.exam_stats.read(exam_id)
         }
 
-        fn get_question(ref self: ContractState, exam_id: u256, question_id: u256) -> Question {
+        fn get_questions(ref self: ContractState, exam_id: u256) -> ByteArray {
             self.assert_exam_exists(exam_id);
-            self.exam_questions.read((exam_id, question_id))
+            self.exam_questions.read(exam_id).questions_uri
         }
 
         fn is_enrolled(ref self: ContractState, exam_id: u256, student: ContractAddress) -> bool {
