@@ -1,5 +1,5 @@
 use starknet::ContractAddress;
-use crate::base::types::{Exam, ExamStats};
+use crate::base::types::{Exam, ExamStats, ExamResult};
 
 
 #[starknet::interface]
@@ -12,11 +12,14 @@ pub trait IExam<TContractState> {
         is_active: bool,
         is_paid: bool,
         price: u256,
+        passmark_percent: u16,
     ) -> Exam;
 
     // Adds a question to an exam and returns the question ID
     // Uploads all questions for an exam using an IPFS URI
-    fn add_questions(ref self: TContractState, exam_id: u256, questions_uri: ByteArray);
+    fn add_questions(
+        ref self: TContractState, total_questions: u32, exam_id: u256, questions_uri: ByteArray,
+    );
 
     // Enrolls the caller in an exam
     fn enroll_in_exam(ref self: TContractState, exam_id: u256);
@@ -43,13 +46,17 @@ pub trait IExam<TContractState> {
         student: ContractAddress,
     ) -> bool;
 
-    fn upload_student_score(
+    fn upload_student_result(
         ref self: TContractState,
         address: ContractAddress,
         exam_id: u256,
-        score: u256,
-        passMark: u256,
+        result_uri: ByteArray,
+        passed: bool,
     ) -> bool;
+
+    fn get_student_result(
+        ref self: TContractState, exam_id: u256, address: ContractAddress,
+    ) -> ExamResult;
 
 
     fn claim_certificate(ref self: TContractState, exam_id: u256);

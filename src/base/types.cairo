@@ -10,11 +10,13 @@ pub struct Exam {
     pub is_active: bool,
     pub is_paid: bool,
     pub price: u256,
+    pub passmark_percent: u16,
 }
 
 #[derive(Drop, Serde, starknet::Store)]
 pub struct Questions {
     pub exam_id: u256,
+    pub total_questions: u32,
     pub questions_uri: ByteArray,
 }
 
@@ -27,6 +29,14 @@ pub struct ExamStats {
 #[derive(Drop, Serde, starknet::Store)]
 pub struct Student {
     address: ContractAddress,
-    exam_Id: u256,
+    exam_id: u256,
     is_registered: bool,
+}
+
+#[derive(Drop, Serde, starknet::Store)]
+pub struct ExamResult {
+    pub exam_id: u256,
+    pub student_address: ContractAddress,
+    pub submit_timestamp: u64,
+    pub result_uri: ByteArray // for score
 }

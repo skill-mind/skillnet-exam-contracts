@@ -5,7 +5,7 @@ use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, cheat_caller_address, declare,
     start_cheat_caller_address, stop_cheat_caller_address,
 };
-use starknet::{ContractAddress, contract_address_const, get_contract_address};
+use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
 
 fn deploy() -> (IExamDispatcher, ContractAddress, ContractAddress) {
     let nft_contract = deploy_nft();
@@ -57,7 +57,7 @@ fn test_successful_exam_deployment() {
 #[test]
 fn test_successful_create_exam() {
     let (contract, _, _) = deploy();
-    let exam = contract.create_exam("Introduction Exams", 5, true, false, 0);
+    let exam = contract.create_exam("Introduction Exams", 5, true, false, 0, 50);
     let exam_data = contract.get_exam(exam.exam_id);
     assert(exam_data.title == "Introduction Exams", 'EXAM_NOT_FOUND');
     assert(exam_data.duration == 5, 'DURATION_MISMATCH');
@@ -68,7 +68,7 @@ fn test_successful_create_exam() {
 #[test]
 fn test_successful_create_paid_exam() {
     let (contract, _, _) = deploy();
-    let exam = contract.create_exam("Introduction Exams", 5, true, true, 100);
+    let exam = contract.create_exam("Introduction Exams", 5, true, true, 100, 50);
     let exam_data = contract.get_exam(exam.exam_id);
     assert(exam_data.title == "Introduction Exams", 'EXAM_NOT_FOUND');
     assert(exam_data.duration == 5, 'DURATION_MISMATCH');
@@ -80,7 +80,7 @@ fn test_successful_create_paid_exam() {
 #[should_panic]
 fn test_successfu_incorrectl_create_exam() {
     let (contract, _, _) = deploy();
-    let exam = contract.create_exam("Introduction Exams", 5, true, false, 0);
+    let exam = contract.create_exam("Introduction Exams", 5, true, false, 0, 50);
     let exam_data = contract.get_exam(exam.exam_id);
     assert(exam_data.title == "Introduction Exams", 'EXAM_NOT_FOUND');
     assert(exam_data.duration == 5, 'DURATION_MISMATCH');
@@ -92,7 +92,7 @@ fn test_successfu_incorrectl_create_exam() {
 #[should_panic]
 fn test_successful_incorrect_create_paid_exam() {
     let (contract, _, _) = deploy();
-    let exam = contract.create_exam("Introduction Exams", 5, true, true, 100);
+    let exam = contract.create_exam("Introduction Exams", 5, true, true, 100, 50);
     let exam_data = contract.get_exam(exam.exam_id);
     assert(exam_data.title == "Introduction Exams", 'EXAM_NOT_FOUND');
     assert(exam_data.duration == 5, 'DURATION_MISMATCH');
@@ -104,9 +104,8 @@ fn test_successful_incorrect_create_paid_exam() {
 #[test]
 fn test_add_and_get_questions() {
     let (contract, _, _) = deploy();
-    contract.create_exam("Science", 90_u64, true, false, 0);
-
-    let question_id = contract.add_questions(0_u256, "123456");
+    contract.create_exam("Science", 90_u64, true, false, 0, 50);
+    contract.add_questions(10, 0_u256, "123456");
 
     let question = contract.get_questions(0_u256);
     assert(question == "123456", 'QUESTIONS_MISMATCH');
@@ -116,7 +115,7 @@ fn test_add_and_get_questions() {
 fn test_enrollment_process() {
     let (contract, _, _) = deploy();
     let contract_address = contract.contract_address;
-    contract.create_exam("Math", 60_u64, true, false, 0);
+    contract.create_exam("Math", 60_u64, true, false, 0, 50);
 
     // Test student enrollment
     let student: ContractAddress = 12345.try_into().unwrap();
@@ -140,7 +139,7 @@ fn test_enrollment_process_paid_exam() {
     let student: ContractAddress = contract_address_const::<'owner'>();
     let skillnet_revenue_account: ContractAddress = contract_address_const::<'skillnet_account'>();
 
-    contract.create_exam("Math", 60_u64, true, true, 100);
+    contract.create_exam("Math", 60_u64, true, true, 100, 50);
 
     let token_dispatcher = IMockUsdcDispatcher { contract_address: erc20_address };
 
@@ -206,7 +205,7 @@ fn test_enrollment_process_free_exam() {
     let (contract, erc20_address, _) = deploy();
     let contract_address = contract.contract_address;
 
-    contract.create_exam("Math", 60_u64, true, false, 100);
+    contract.create_exam("Math", 60_u64, true, false, 100, 50);
 
     let token_dispatcher = IMockUsdcDispatcher { contract_address: erc20_address };
 
@@ -248,7 +247,7 @@ fn test_enrollment_process_free_exam() {
 fn test_enrollment_process_paid_exam_broke_student() {
     let (contract, _, _) = deploy();
     let contract_address = contract.contract_address;
-    contract.create_exam("Math", 60_u64, true, true, 200);
+    contract.create_exam("Math", 60_u64, true, true, 200, 50);
 
     // Test student enrollment
     let student: ContractAddress = contract_address_const::<'broke'>();
@@ -270,7 +269,7 @@ fn test_enrollment_process_paid_exam_broke_student() {
 fn test_double_enrollment() {
     let (contract, _, _) = deploy();
     let contract_address = contract.contract_address;
-    contract.create_exam("History", 45_u64, true, false, 0);
+    contract.create_exam("History", 45_u64, true, false, 0, 50);
 
     let student: ContractAddress = 54321.try_into().unwrap();
     start_cheat_caller_address(contract_address, student);
@@ -287,7 +286,7 @@ fn test_exam_status_toggle() {
     let contract_address = contract.contract_address;
     start_cheat_caller_address(contract_address, creator);
 
-    contract.create_exam("Physics", 75_u64, true, false, 0);
+    contract.create_exam("Physics", 75_u64, true, false, 0, 50);
 
     // Toggle status
     contract.toggle_exam_status(0_u256);
@@ -310,7 +309,7 @@ fn test_non_creator_toggle_status() {
     let (contract, _, _) = deploy();
     let contract_address = contract.contract_address;
     start_cheat_caller_address(contract_address, creator);
-    contract.create_exam("Chemistry", 50_u64, true, false, 0);
+    contract.create_exam("Chemistry", 50_u64, true, false, 0, 50);
     stop_cheat_caller_address(creator);
 
     start_cheat_caller_address(contract_address, non_creator);
@@ -327,10 +326,10 @@ fn test_add_question_to_inactive_exam() {
     let contract_address = contract.contract_address;
     start_cheat_caller_address(contract_address, creator);
 
-    contract.create_exam("Biology", 30_u64, false, false, 0);
+    contract.create_exam("Biology", 30_u64, false, false, 0, 50);
 
     // This should panic
-    contract.add_questions(0_u256, "123456");
+    contract.add_questions(10, 0_u256, "123456");
 
     stop_cheat_caller_address(creator);
 }
@@ -499,6 +498,7 @@ fn test_successful_collect_exam_fee() {
     assert(beneficiary_final_balance > beneficiary_initial_balance, 'Transfer  failed');
     assert(sender_final_balance < sender_initial_balance, 'Sender balance err');
 }
+
 #[test]
 fn test_enrollment_upload_result() {
     let (contract, erc20_address, _) = deploy();
@@ -506,7 +506,7 @@ fn test_enrollment_upload_result() {
     let student: ContractAddress = contract_address_const::<'owner'>();
     let skillnet_revenue_account: ContractAddress = contract_address_const::<'skillnet_account'>();
 
-    contract.create_exam("Math", 60_u64, true, true, 100);
+    contract.create_exam("Math", 60_u64, true, true, 100, 50);
 
     let token_dispatcher = IMockUsdcDispatcher { contract_address: erc20_address };
 
@@ -535,11 +535,13 @@ fn test_enrollment_upload_result() {
     let stats = contract.get_exam_stats(0_u256);
     assert(stats.total_students == 1_u256, 'STUDENT_COUNT_MISMATCH');
 
-    contract.upload_student_score(student, 0, 99, 70);
+    let submit_time = get_block_timestamp();
 
-    let success = contract.is_result_out(0);
+    contract.upload_student_result(student, 0, "98057", true);
 
-    assert(success, 'Result not uploaded');
+    let result = contract.get_student_result(0, student);
+
+    assert(result.submit_timestamp == submit_time, 'Result not uploaded');
 }
 #[test]
 fn test_enrollment_result_not_uploaded() {
@@ -548,7 +550,7 @@ fn test_enrollment_result_not_uploaded() {
     let student: ContractAddress = contract_address_const::<'owner'>();
     let skillnet_revenue_account: ContractAddress = contract_address_const::<'skillnet_account'>();
 
-    contract.create_exam("Math", 60_u64, true, true, 100);
+    contract.create_exam("Math", 60_u64, true, true, 100, 50);
 
     let token_dispatcher = IMockUsdcDispatcher { contract_address: erc20_address };
 
@@ -589,7 +591,7 @@ fn test_enrollment_process_claim_nft() {
     let student: ContractAddress = contract_address_const::<'owner'>();
     let skillnet_revenue_account: ContractAddress = contract_address_const::<'skillnet_account'>();
 
-    contract.create_exam("Math", 60_u64, true, true, 100);
+    contract.create_exam("Math", 60_u64, true, true, 100, 50);
 
     let token_dispatcher = IMockUsdcDispatcher { contract_address: erc20_address };
 
@@ -618,7 +620,7 @@ fn test_enrollment_process_claim_nft() {
     let stats = contract.get_exam_stats(0_u256);
     assert(stats.total_students == 1_u256, 'STUDENT_COUNT_MISMATCH');
 
-    contract.upload_student_score(student, 0, 99, 70);
+    contract.upload_student_result(student, 0, "98057", true);
 
     start_cheat_caller_address(contract_address, student);
     contract.claim_certificate(0_u256);
@@ -636,7 +638,7 @@ fn test_enrollment_process_claim_nft_not_eligible() {
     let student: ContractAddress = contract_address_const::<'owner'>();
     let skillnet_revenue_account: ContractAddress = contract_address_const::<'skillnet_account'>();
 
-    contract.create_exam("Math", 60_u64, true, true, 100);
+    contract.create_exam("Math", 60_u64, true, true, 100, 50);
 
     let token_dispatcher = IMockUsdcDispatcher { contract_address: erc20_address };
 
@@ -665,7 +667,7 @@ fn test_enrollment_process_claim_nft_not_eligible() {
     let stats = contract.get_exam_stats(0_u256);
     assert(stats.total_students == 1_u256, 'STUDENT_COUNT_MISMATCH');
 
-    contract.upload_student_score(student, 0, 59, 70);
+    contract.upload_student_result(student, 0, "98057", true);
 
     start_cheat_caller_address(contract_address, student);
     contract.claim_certificate(0_u256);

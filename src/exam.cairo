@@ -7,7 +7,7 @@ pub mod Exam {
     use core::array::ArrayTrait;
     use starknet::storage::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, Vec};
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address};
-    use crate::base::types::{Exam, ExamStats, Questions, Student};
+    use crate::base::types::{Exam, ExamStats, Questions, Student, ExamResult};
     use crate::interfaces::IExam::IExam;
     use super::{IMockUsdcDispatcherTrait, ISkillnetNftDispatcherTrait};
 
@@ -21,7 +21,7 @@ pub mod Exam {
         exam_enrollments: Map<(u256, ContractAddress), bool>,
         exam_stats: Map<u256, ExamStats>,
         nft_contract_address: ContractAddress,
-        students_to_exam_scores: Map<(ContractAddress, u256), u256>,
+        students_to_exam_results: Map<(ContractAddress, u256), ExamResult>,
         validators: Vec<ContractAddress>,
         students_passed: Map<(ContractAddress, u256), bool>,
         //tracks all minted nft id minted by events
@@ -96,6 +96,7 @@ pub mod Exam {
             is_active: bool,
             is_paid: bool,
             price: u256,
+            passmark_percent: u16,
         ) -> Exam {
             let creator = get_caller_address();
             let datetime = get_block_timestamp();
@@ -112,6 +113,7 @@ pub mod Exam {
                 is_active,
                 is_paid,
                 price,
+                passmark_percent,
             };
 
             self.exams.write(exam_id, exam);
@@ -133,14 +135,18 @@ pub mod Exam {
             exam_data
         }
 
-        fn add_questions(ref self: ContractState, exam_id: u256, questions_uri: ByteArray) {
+        fn add_questions(
+            ref self: ContractState, total_questions: u32, exam_id: u256, questions_uri: ByteArray,
+        ) {
             self.assert_exam_exists(exam_id);
             self.assert_exam_active(exam_id);
 
             let creator = get_caller_address();
             self.assert_is_exam_creator(exam_id, creator);
 
-            let question_data = Questions { exam_id, questions_uri: questions_uri.clone() };
+            let question_data = Questions {
+                exam_id, total_questions, questions_uri: questions_uri.clone(),
+            };
 
             self.exam_questions.write(exam_id, question_data);
 
@@ -197,6 +203,7 @@ pub mod Exam {
 
         fn get_questions(ref self: ContractState, exam_id: u256) -> ByteArray {
             self.assert_exam_exists(exam_id);
+
             self.exam_questions.read(exam_id).questions_uri
         }
 
@@ -239,20 +246,34 @@ pub mod Exam {
             self.emit(CourseCertClaimed { course_identifier: exam_id, candidate: student });
         }
 
-        fn upload_student_score(
+        fn upload_student_result(
             ref self: ContractState,
             address: ContractAddress,
             exam_id: u256,
-            score: u256,
-            passMark: u256,
+            result_uri: ByteArray,
+            passed: bool,
         ) -> bool {
-            // Ensure is admin
-            if (score > passMark) {
-                self.students_passed.write((address, exam_id), true);
-            }
-            self.students_to_exam_scores.write((address, exam_id), score);
-            self.scores_uploaded.write(exam_id, true);
+            assert(self.is_enrolled(exam_id, address), 'Not enrolled');
+            self
+                .students_to_exam_results
+                .write(
+                    (address, exam_id),
+                    ExamResult {
+                        exam_id,
+                        student_address: address,
+                        submit_timestamp: get_block_timestamp(),
+                        result_uri,
+                    },
+                );
+
+            self.students_passed.write((address, exam_id), passed);
             true
+        }
+
+        fn get_student_result(
+            ref self: ContractState, exam_id: u256, address: ContractAddress,
+        ) -> ExamResult {
+            self.students_to_exam_results.read((address, exam_id))
         }
 
         fn collect_exam_fee(
