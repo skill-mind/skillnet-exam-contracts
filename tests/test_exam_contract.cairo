@@ -21,11 +21,7 @@ fn deploy() -> (IExamDispatcher, ContractAddress, ContractAddress) {
     (erc20_address, skillnet_revenue_account, nft_address, OWNER).serialize(ref calldata);
 
     let contract_class = declare("Exam").unwrap().contract_class();
-    let (contract_address, _) = contract_class
-        .deploy(
-            @calldata
-        )
-        .unwrap();
+    let (contract_address, _) = contract_class.deploy(@calldata).unwrap();
 
     (IExamDispatcher { contract_address }, erc20_address, nft_address)
 }

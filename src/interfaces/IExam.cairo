@@ -1,5 +1,5 @@
 use starknet::ContractAddress;
-use crate::base::types::{Exam, ExamStats, ExamResult};
+use crate::base::types::{Exam, ExamResult, ExamStats};
 
 
 #[starknet::interface]

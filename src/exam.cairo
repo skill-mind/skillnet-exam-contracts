@@ -5,13 +5,15 @@ use skillnet_exam::interfaces::ISkillnetNft::{ISkillnetNftDispatcher, ISkillnetN
 #[starknet::contract]
 pub mod Exam {
     use core::array::ArrayTrait;
-    use starknet::storage::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, Vec};
-    use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address, ClassHash};
-    use crate::base::types::{Exam, ExamStats, Questions, Student, ExamResult};
-    use crate::interfaces::IExam::IExam;
-    use super::{IMockUsdcDispatcherTrait, ISkillnetNftDispatcherTrait};
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
+    use starknet::storage::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, Vec};
+    use starknet::{
+        ClassHash, ContractAddress, get_block_timestamp, get_caller_address, get_contract_address,
+    };
+    use crate::base::types::{Exam, ExamResult, ExamStats, Questions, Student};
+    use crate::interfaces::IExam::IExam;
+    use super::{IMockUsdcDispatcherTrait, ISkillnetNftDispatcherTrait};
 
     component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
 
