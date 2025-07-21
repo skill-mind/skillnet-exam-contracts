@@ -7,20 +7,23 @@ use snforge_std::{
 };
 use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
 
+const OWNER: ContractAddress = 'OWNER'.try_into().unwrap();
+
 fn deploy() -> (IExamDispatcher, ContractAddress, ContractAddress) {
     let nft_contract = deploy_nft();
     let nft_address = nft_contract.contract_address;
 
     let erc20_contract = deploy_erc20();
     let erc20_address = erc20_contract.contract_address;
-
     let skillnet_revenue_account: ContractAddress = contract_address_const::<'skillnet_account'>();
+
+    let mut calldata = array![];
+    (erc20_address, skillnet_revenue_account, nft_address, OWNER).serialize(ref calldata);
 
     let contract_class = declare("Exam").unwrap().contract_class();
     let (contract_address, _) = contract_class
         .deploy(
-            @array![erc20_address.into(), skillnet_revenue_account.into(), nft_address.into()]
-                .into(),
+            @calldata
         )
         .unwrap();
 
