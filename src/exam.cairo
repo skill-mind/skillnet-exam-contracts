@@ -361,7 +361,6 @@ pub mod Exam {
     #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
-            // This might be upgraded from the factory
             assert(get_caller_address() == self.owner.read(), 'UNAUTHORIZED CALLER');
             self.upgradeable.upgrade(new_class_hash);
         }
