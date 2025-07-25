@@ -5,16 +5,24 @@ use skillnet_exam::interfaces::ISkillnetNft::{ISkillnetNftDispatcher, ISkillnetN
 #[starknet::contract]
 pub mod Exam {
     use core::array::ArrayTrait;
+    use openzeppelin::upgrades::UpgradeableComponent;
+    use openzeppelin::upgrades::interface::IUpgradeable;
     use starknet::storage::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, Vec};
-    use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address};
-    use crate::base::types::{Exam, ExamStats, Questions, Student, ExamResult};
+    use starknet::{
+        ClassHash, ContractAddress, get_block_timestamp, get_caller_address, get_contract_address,
+    };
+    use crate::base::types::{Exam, ExamResult, ExamStats, Questions, Student};
     use crate::interfaces::IExam::IExam;
     use super::{IMockUsdcDispatcherTrait, ISkillnetNftDispatcherTrait};
 
+    component!(path: UpgradeableComponent, storage: upgradeable, event: UpgradeableEvent);
+
+    impl UpgradeableInternalImpl = UpgradeableComponent::InternalImpl<ContractState>;
 
     #[storage]
     pub struct Storage {
         exams: Map<u256, Exam>,
+        owner: ContractAddress,
         next_exam_id: u256,
         next_question_id: Map<u256, u256>,
         exam_questions: Map<u256, Questions>,
@@ -30,6 +38,8 @@ pub mod Exam {
         students: Student,
         strk_token_address: ContractAddress,
         skillnet_account: ContractAddress,
+        #[substorage(v0)]
+        upgradeable: UpgradeableComponent::Storage,
     }
 
     #[event]
@@ -40,6 +50,8 @@ pub mod Exam {
         StudentEnrolled: StudentEnrolled,
         ExamStatusChanged: ExamStatusChanged,
         CourseCertClaimed: CourseCertClaimed,
+        #[flat]
+        UpgradeableEvent: UpgradeableComponent::Event,
     }
 
     #[derive(Drop, Serde, starknet::Event)]
@@ -80,11 +92,13 @@ pub mod Exam {
         erc20: ContractAddress,
         skill: ContractAddress,
         nft: ContractAddress,
+        owner: ContractAddress,
     ) {
         self.next_exam_id.write(0_u256);
         self.strk_token_address.write(erc20);
         self.skillnet_account.write(skill);
         self.nft_contract_address.write(nft);
+        self.owner.write(owner);
     }
 
     #[abi(embed_v0)]
@@ -341,6 +355,14 @@ pub mod Exam {
         fn assert_exam_active(self: @ContractState, exam_id: u256) {
             let exam = self.exams.read(exam_id);
             assert(exam.is_active, 'EXAM_INACTIVE');
+        }
+    }
+
+    #[abi(embed_v0)]
+    impl UpgradeableImpl of IUpgradeable<ContractState> {
+        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+            assert(get_caller_address() == self.owner.read(), 'UNAUTHORIZED CALLER');
+            self.upgradeable.upgrade(new_class_hash);
         }
     }
 }

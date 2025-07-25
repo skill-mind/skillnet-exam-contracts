@@ -1,11 +1,18 @@
+use openzeppelin::upgrades::interface::{IUpgradeableDispatcher, IUpgradeableDispatcherTrait};
+use openzeppelin::upgrades::upgradeable::UpgradeableComponent::{Event as UpgradeEvent, Upgraded};
 use skillnet_exam::interfaces::IExam::{IExamDispatcher, IExamDispatcherTrait};
 use skillnet_exam::interfaces::IMockUsdc::{IMockUsdcDispatcher, IMockUsdcDispatcherTrait};
 use skillnet_exam::interfaces::ISkillnetNft::{ISkillnetNftDispatcher, ISkillnetNftDispatcherTrait};
 use snforge_std::{
-    CheatSpan, ContractClassTrait, DeclareResultTrait, cheat_caller_address, declare,
-    start_cheat_caller_address, stop_cheat_caller_address,
+    CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,
+    cheat_caller_address, declare, spy_events, start_cheat_caller_address,
+    stop_cheat_caller_address,
 };
 use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
+
+fn OWNER() -> ContractAddress {
+    contract_address_const::<'OWNER'>()
+}
 
 fn deploy() -> (IExamDispatcher, ContractAddress, ContractAddress) {
     let nft_contract = deploy_nft();
@@ -13,16 +20,16 @@ fn deploy() -> (IExamDispatcher, ContractAddress, ContractAddress) {
 
     let erc20_contract = deploy_erc20();
     let erc20_address = erc20_contract.contract_address;
-
     let skillnet_revenue_account: ContractAddress = contract_address_const::<'skillnet_account'>();
 
+    let mut calldata = array![];
+    erc20_address.serialize(ref calldata);
+    skillnet_revenue_account.serialize(ref calldata);
+    nft_address.serialize(ref calldata);
+    OWNER().serialize(ref calldata);
+
     let contract_class = declare("Exam").unwrap().contract_class();
-    let (contract_address, _) = contract_class
-        .deploy(
-            @array![erc20_address.into(), skillnet_revenue_account.into(), nft_address.into()]
-                .into(),
-        )
-        .unwrap();
+    let (contract_address, _) = contract_class.deploy(@calldata).unwrap();
 
     (IExamDispatcher { contract_address }, erc20_address, nft_address)
 }
@@ -675,5 +682,34 @@ fn test_enrollment_process_claim_nft_not_eligible() {
 
     let success = contract.student_have_nft(0, 0, nft_address, student);
     assert(!success, 'Student do not have NFT');
+}
+
+#[test]
+fn test_contract_upgrade() {
+    let (exam, _, _) = deploy();
+    let dispatcher = IUpgradeableDispatcher { contract_address: exam.contract_address };
+    // to change the class hash, we feign this.
+    let new_class_hash = declare("MockUsdc").unwrap().contract_class().class_hash;
+
+    cheat_caller_address(exam.contract_address, OWNER(), CheatSpan::TargetCalls(1));
+
+    let mut spy = spy_events();
+    dispatcher.upgrade(*new_class_hash);
+    let event = UpgradeEvent::Upgraded(Upgraded { class_hash: *new_class_hash });
+
+    spy.assert_emitted(@array![(exam.contract_address, event)]);
+}
+
+#[test]
+#[should_panic(expected: 'UNAUTHORIZED CALLER')]
+fn test_contract_upgrade_should_panic_on_non_owner() {
+    let (exam, _, _) = deploy();
+    let dispatcher = IUpgradeableDispatcher { contract_address: exam.contract_address };
+    // to change the class hash, we feign this.
+    let new_class_hash = declare("MockUsdc").unwrap().contract_class().class_hash;
+
+    let non_owner: ContractAddress = 'NON_OWNER'.try_into().unwrap();
+    cheat_caller_address(exam.contract_address, non_owner, CheatSpan::TargetCalls(1));
+    dispatcher.upgrade(*new_class_hash);
 }
 
