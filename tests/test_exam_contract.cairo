@@ -10,7 +10,9 @@ use snforge_std::{
 };
 use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
 
-const OWNER: ContractAddress = 'OWNER'.try_into().unwrap();
+fn OWNER() -> ContractAddress {
+    contract_address_const::<'OWNER'>()
+}
 
 fn deploy() -> (IExamDispatcher, ContractAddress, ContractAddress) {
     let nft_contract = deploy_nft();
@@ -21,7 +23,10 @@ fn deploy() -> (IExamDispatcher, ContractAddress, ContractAddress) {
     let skillnet_revenue_account: ContractAddress = contract_address_const::<'skillnet_account'>();
 
     let mut calldata = array![];
-    (erc20_address, skillnet_revenue_account, nft_address, OWNER).serialize(ref calldata);
+    erc20_address.serialize(ref calldata);
+    skillnet_revenue_account.serialize(ref calldata);
+    nft_address.serialize(ref calldata);
+    OWNER().serialize(ref calldata);
 
     let contract_class = declare("Exam").unwrap().contract_class();
     let (contract_address, _) = contract_class.deploy(@calldata).unwrap();
@@ -686,7 +691,7 @@ fn test_contract_upgrade() {
     // to change the class hash, we feign this.
     let new_class_hash = declare("MockUsdc").unwrap().contract_class().class_hash;
 
-    cheat_caller_address(exam.contract_address, OWNER, CheatSpan::TargetCalls(1));
+    cheat_caller_address(exam.contract_address, OWNER(), CheatSpan::TargetCalls(1));
 
     let mut spy = spy_events();
     dispatcher.upgrade(*new_class_hash);
