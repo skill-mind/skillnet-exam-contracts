@@ -1,6 +1,6 @@
 use starknet::ContractAddress;
 
-#[derive(Drop, Serde, starknet::Store)]
+#[derive(Drop, Clone, Serde, starknet::Store)]
 pub struct Exam {
     pub exam_id: u256,
     pub title: ByteArray,
@@ -39,4 +39,13 @@ pub struct ExamResult {
     pub student_address: ContractAddress,
     pub submit_timestamp: u64,
     pub result_uri: ByteArray // for score
+}
+
+#[derive(Drop, Clone, Serde, starknet::Store)]
+pub struct ExamSubmitted {
+    pub exam_id: u256,
+    pub exam_uri: ByteArray,
+    pub student_address: ContractAddress,
+    pub submit_timestamp: u64,
+    pub exam_video: ByteArray,
 }
