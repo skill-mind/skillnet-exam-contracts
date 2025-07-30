@@ -492,7 +492,7 @@ pub mod Exam {
             self: @ContractState, exam_id: u256, student: ContractAddress,
         ) {
             let exam_submitted = self.exams_submitted_status.read((student, exam_id));
-            assert(exam_submitted, 'EXAM_ALREADY_SUBMITTED');
+            assert(!exam_submitted, 'EXAM_ALREADY_SUBMITTED');
         }
         fn assert_exam_duration_not_expired(self: @ContractState, exam_id: u256) {
             let exam = self.exams.read(exam_id);
