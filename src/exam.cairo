@@ -7,11 +7,14 @@ pub mod Exam {
     use core::array::ArrayTrait;
     use openzeppelin::upgrades::UpgradeableComponent;
     use openzeppelin::upgrades::interface::IUpgradeable;
-    use starknet::storage::{Map, StoragePointerReadAccess, StoragePointerWriteAccess, Vec};
+    use starknet::storage::{
+        Map, MutableVecTrait, StoragePathEntry, StoragePointerReadAccess, StoragePointerWriteAccess,
+        Vec,
+    };
     use starknet::{
         ClassHash, ContractAddress, get_block_timestamp, get_caller_address, get_contract_address,
     };
-    use crate::base::types::{Exam, ExamResult, ExamStats, Questions, Student};
+    use crate::base::types::{Exam, ExamResult, ExamStats, ExamSubmitted, Questions, Student};
     use crate::interfaces::IExam::IExam;
     use super::{IMockUsdcDispatcherTrait, ISkillnetNftDispatcherTrait};
 
@@ -22,16 +25,26 @@ pub mod Exam {
     #[storage]
     pub struct Storage {
         exams: Map<u256, Exam>,
+        all_exams_count: u256,
         owner: ContractAddress,
         next_exam_id: u256,
         next_question_id: Map<u256, u256>,
         exam_questions: Map<u256, Questions>,
         exam_enrollments: Map<(u256, ContractAddress), bool>,
+        student_enrolled_exams: Map<ContractAddress, Vec<u256>>,
+        exam_enrolled_students: Map<u256, Vec<ContractAddress>>,
         exam_stats: Map<u256, ExamStats>,
         nft_contract_address: ContractAddress,
         students_to_exam_results: Map<(ContractAddress, u256), ExamResult>,
+        exam_submission_count: u256,
+        exams_submitted: Map<u256, ExamSubmitted>, // all exams submitted by students
+        exam_submitted_by_student: Map<
+            ContractAddress, Vec<u256>,
+        >, // all exams submitted by a student
+        all_submits_for_exam: Map<u256, Vec<u256>>, // all submits for an exam
         validators: Vec<ContractAddress>,
         students_passed: Map<(ContractAddress, u256), bool>,
+        exams_submitted_status: Map<(ContractAddress, u256), bool>,
         //tracks all minted nft id minted by events
         track_minted_nft_id: Map<(u256, ContractAddress), u256>,
         scores_uploaded: Map<u256, bool>,
@@ -52,6 +65,7 @@ pub mod Exam {
         CourseCertClaimed: CourseCertClaimed,
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
+        ExamSubmittedEvent: ExamSubmittedEvent,
     }
 
     #[derive(Drop, Serde, starknet::Event)]
@@ -84,6 +98,15 @@ pub mod Exam {
     struct ExamStatusChanged {
         exam_id: u256,
         new_status: bool,
+    }
+
+    #[derive(Drop, Serde, starknet::Event)]
+    struct ExamSubmittedEvent {
+        exam_id: u256,
+        exam_uri: ByteArray,
+        student_address: ContractAddress,
+        submit_timestamp: u64,
+        exam_video: ByteArray,
     }
 
     #[constructor]
@@ -138,6 +161,8 @@ pub mod Exam {
             self.next_question_id.write(exam_id, 0_u256);
 
             let exam_data = self.exams.read(exam_id);
+
+            self.all_exams_count.write(self.all_exams_count.read() + 1_u256);
 
             self
                 .emit(
@@ -194,7 +219,12 @@ pub mod Exam {
             }
 
             let already_enrolled = self.exam_enrollments.read((exam_id, student));
+
             assert(!already_enrolled, 'ALREADY_ENROLLED');
+
+            self.student_enrolled_exams.entry(student).push(exam_id);
+
+            self.exam_enrolled_students.entry(exam_id).push(student);
 
             self.exam_enrollments.write((exam_id, student), true);
 
@@ -209,6 +239,70 @@ pub mod Exam {
             self.assert_exam_exists(exam_id);
             self.exams.read(exam_id)
         }
+
+        fn get_student_exams(ref self: ContractState, address: ContractAddress) -> Array<Exam> {
+            let mut array_of_exams = ArrayTrait::<Exam>::new();
+            let exams_vec = self.student_enrolled_exams.entry(address);
+            for exam in 0..exams_vec.len() {
+                let exam_id = exams_vec.at(exam).read();
+                let exam_struct = self.exams.read(exam_id);
+                array_of_exams.append(exam_struct);
+            }
+            array_of_exams
+        }
+
+
+        // gets an array of all exams
+        fn get_all_exams(ref self: ContractState) -> Array<Exam> {
+            let mut array_of_exams = ArrayTrait::<Exam>::new();
+            for exam in 0..self.all_exams_count.read() {
+                let exam_struct = self.exams.read(exam);
+                array_of_exams.append(exam_struct);
+            }
+            array_of_exams
+        }
+
+        // gets a list of all students enrolled in a specific exam
+        fn get_students_enrolled_in_exam(
+            ref self: ContractState, exam_id: u256,
+        ) -> Array<ContractAddress> {
+            let mut array_of_students = ArrayTrait::<ContractAddress>::new();
+            let students_vec = self.exam_enrolled_students.entry(exam_id);
+            for student in 0..students_vec.len() {
+                let student_address = students_vec.at(student).read();
+                array_of_students.append(student_address);
+            }
+            array_of_students
+        }
+
+        // gets a list of all exams submitted by a student
+        fn get_exams_submitted_by_student(
+            ref self: ContractState, student: ContractAddress,
+        ) -> Array<ExamSubmitted> {
+            let mut array_of_exams = ArrayTrait::<ExamSubmitted>::new();
+            let exams_vec = self.exam_submitted_by_student.entry(student);
+            for exam in 0..exams_vec.len() {
+                let exam_id = exams_vec.at(exam).read();
+                let exam_struct = self.exams_submitted.read(exam_id);
+                array_of_exams.append(exam_struct);
+            }
+            array_of_exams
+        }
+
+        // gets a list of all submit for an exam
+        fn get_all_submits_for_exam(
+            ref self: ContractState, exam_id: u256,
+        ) -> Array<ExamSubmitted> {
+            let mut array_of_exams = ArrayTrait::<ExamSubmitted>::new();
+            let exams_vec = self.all_submits_for_exam.entry(exam_id);
+            for exam in 0..exams_vec.len() {
+                let exam_id = exams_vec.at(exam).read();
+                let exam_struct = self.exams_submitted.read(exam_id);
+                array_of_exams.append(exam_struct);
+            }
+            array_of_exams
+        }
+
 
         fn get_exam_stats(ref self: ContractState, exam_id: u256) -> ExamStats {
             self.assert_exam_exists(exam_id);
@@ -258,6 +352,43 @@ pub mod Exam {
                 return;
             }
             self.emit(CourseCertClaimed { course_identifier: exam_id, candidate: student });
+        }
+
+        fn submit_exam(
+            ref self: ContractState, exam_id: u256, exam_uri: ByteArray, exam_video: ByteArray,
+        ) {
+            let student = get_caller_address();
+            self.assert_exam_exists(exam_id);
+            assert(self.is_enrolled(exam_id, student), 'STUDENT_NOT_ENROLLED');
+            self.assert_exam_not_submitted(exam_id, student);
+            self.assert_exam_duration_not_expired(exam_id);
+
+            let exam_to_submit = ExamSubmitted {
+                exam_id,
+                exam_uri: exam_uri.clone(),
+                student_address: student,
+                submit_timestamp: get_block_timestamp(),
+                exam_video: exam_video.clone(),
+            };
+            let new_exam_id = self.exam_submission_count.read() + 1;
+            self.exams_submitted.write(new_exam_id, exam_to_submit);
+            self.exam_submitted_by_student.entry(student).push(new_exam_id);
+            self.all_submits_for_exam.entry(exam_id).push(new_exam_id);
+            self.exam_submission_count.write(new_exam_id);
+            self.exams_submitted_status.write((student, exam_id), true);
+
+            self
+                .emit(
+                    Event::ExamSubmittedEvent(
+                        ExamSubmittedEvent {
+                            exam_id,
+                            exam_uri,
+                            student_address: student,
+                            exam_video,
+                            submit_timestamp: get_block_timestamp(),
+                        },
+                    ),
+                );
         }
 
         fn upload_student_result(
@@ -355,6 +486,18 @@ pub mod Exam {
         fn assert_exam_active(self: @ContractState, exam_id: u256) {
             let exam = self.exams.read(exam_id);
             assert(exam.is_active, 'EXAM_INACTIVE');
+        }
+
+        fn assert_exam_not_submitted(
+            self: @ContractState, exam_id: u256, student: ContractAddress,
+        ) {
+            let exam_submitted = self.exams_submitted_status.read((student, exam_id));
+            assert(!exam_submitted, 'EXAM_ALREADY_SUBMITTED');
+        }
+        fn assert_exam_duration_not_expired(self: @ContractState, exam_id: u256) {
+            let exam = self.exams.read(exam_id);
+            let current_time = get_block_timestamp();
+            assert(current_time < exam.datetime + exam.duration, 'EXAM_DURATION_EXPIRED');
         }
     }
 

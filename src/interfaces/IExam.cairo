@@ -1,5 +1,5 @@
 use starknet::ContractAddress;
-use crate::base::types::{Exam, ExamResult, ExamStats};
+use crate::base::types::{Exam, ExamResult, ExamStats, ExamSubmitted};
 
 
 #[starknet::interface]
@@ -27,6 +27,22 @@ pub trait IExam<TContractState> {
     // Gets exam details by ID
     fn get_exam(ref self: TContractState, exam_id: u256) -> Exam;
 
+    // gets an array of all exams
+    fn get_all_exams(ref self: TContractState) -> Array<Exam>;
+
+    // gets a list of all students enrolled in a specific exam
+    fn get_students_enrolled_in_exam(
+        ref self: TContractState, exam_id: u256,
+    ) -> Array<ContractAddress>;
+
+    // gets a list of all exams submitted by a student
+    fn get_exams_submitted_by_student(
+        ref self: TContractState, student: ContractAddress,
+    ) -> Array<ExamSubmitted>;
+
+    // gets a list of all submit for an exam
+    fn get_all_submits_for_exam(ref self: TContractState, exam_id: u256) -> Array<ExamSubmitted>;
+
     // Gets exam statistics by ID
     fn get_exam_stats(ref self: TContractState, exam_id: u256) -> ExamStats;
 
@@ -37,6 +53,10 @@ pub trait IExam<TContractState> {
 
     // Toggles an exam's active status
     fn toggle_exam_status(ref self: TContractState, exam_id: u256);
+
+    fn submit_exam(
+        ref self: TContractState, exam_id: u256, exam_uri: ByteArray, exam_video: ByteArray,
+    );
 
     fn student_have_nft(
         ref self: TContractState,
@@ -58,6 +78,7 @@ pub trait IExam<TContractState> {
         ref self: TContractState, exam_id: u256, address: ContractAddress,
     ) -> ExamResult;
 
+    fn get_student_exams(ref self: TContractState, address: ContractAddress) -> Array<Exam>;
 
     fn claim_certificate(ref self: TContractState, exam_id: u256);
 
@@ -66,6 +87,7 @@ pub trait IExam<TContractState> {
     fn collect_exam_fee(
         ref self: TContractState, payer: ContractAddress, amount: u256, recipient: ContractAddress,
     );
+
     fn get_addresses(ref self: TContractState) -> (ContractAddress, ContractAddress);
 }
 

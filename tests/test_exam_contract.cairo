@@ -1,12 +1,13 @@
 use openzeppelin::upgrades::interface::{IUpgradeableDispatcher, IUpgradeableDispatcherTrait};
 use openzeppelin::upgrades::upgradeable::UpgradeableComponent::{Event as UpgradeEvent, Upgraded};
+use skillnet_exam::base::types::{Exam, ExamSubmitted};
 use skillnet_exam::interfaces::IExam::{IExamDispatcher, IExamDispatcherTrait};
 use skillnet_exam::interfaces::IMockUsdc::{IMockUsdcDispatcher, IMockUsdcDispatcherTrait};
 use skillnet_exam::interfaces::ISkillnetNft::{ISkillnetNftDispatcher, ISkillnetNftDispatcherTrait};
 use snforge_std::{
     CheatSpan, ContractClassTrait, DeclareResultTrait, EventSpyAssertionsTrait,
-    cheat_caller_address, declare, spy_events, start_cheat_caller_address,
-    stop_cheat_caller_address,
+    cheat_caller_address, declare, spy_events, start_cheat_block_timestamp,
+    start_cheat_caller_address, stop_cheat_caller_address,
 };
 use starknet::{ContractAddress, contract_address_const, get_block_timestamp};
 
@@ -713,3 +714,161 @@ fn test_contract_upgrade_should_panic_on_non_owner() {
     dispatcher.upgrade(*new_class_hash);
 }
 
+#[test]
+fn test_get_all_exams() {
+    let (contract, _, _) = deploy();
+
+    contract.create_exam("Math", 60_u64, true, true, 100, 50);
+    contract.create_exam("Science", 60_u64, true, true, 100, 50);
+    contract.create_exam("History", 60_u64, true, true, 100, 50);
+
+    let exams: Array<Exam> = contract.get_all_exams();
+    assert(exams.len() == 3, 'EXAMS_COUNT_MISMATCH');
+    let exam0: Exam = exams.at(0).clone();
+    let exam1: Exam = exams.at(1).clone();
+    let exam2: Exam = exams.at(2).clone();
+
+    assert(exam0.title == "Math", 'EXAM0_TITLE_MISMATCH');
+    assert(exam1.title == "Science", 'EXAM1_TITLE_MISMATCH');
+    assert(exam2.title == "History", 'EXAM2_TITLE_MISMATCH');
+}
+
+#[test]
+fn test_get_students_enrolled_in_exam() {
+    let (contract, _, _) = deploy();
+    let contract_address = contract.contract_address;
+    contract.create_exam("Math", 60_u64, true, false, 0, 50);
+
+    // Test student enrollment
+    let student1: ContractAddress = 12345.try_into().unwrap();
+    start_cheat_caller_address(contract_address, student1);
+    contract.enroll_in_exam(0_u256);
+    stop_cheat_caller_address(contract_address);
+
+    let student2: ContractAddress = 67890.try_into().unwrap();
+    start_cheat_caller_address(contract_address, student2);
+    contract.enroll_in_exam(0_u256);
+    stop_cheat_caller_address(contract_address);
+
+    let students: Array<ContractAddress> = contract.get_students_enrolled_in_exam(0_u256);
+    assert(students.len() == 2, 'STUDENTS_COUNT_MISMATCH');
+    assert(*students.at(0) == student1, 'STUDENT1_MISMATCH');
+    assert(*students.at(1) == student2, 'STUDENT2_MISMATCH');
+}
+
+#[test]
+fn test_submit_exam_successfully() {
+    let (contract, _, _) = deploy();
+    let contract_address = contract.contract_address;
+    let exam = contract.create_exam("Introduction Exams", 5, true, false, 0, 50);
+    let exam_data = contract.get_exam(exam.exam_id);
+
+    contract.add_questions(10, 0_u256, "123456");
+
+    let student: ContractAddress = 12345.try_into().unwrap();
+    start_cheat_caller_address(contract_address, student);
+    contract.enroll_in_exam(0_u256);
+
+    let submit_time = get_block_timestamp();
+    contract.submit_exam(0_u256, "123456", "123456");
+
+    stop_cheat_caller_address(student);
+
+    let exams: Array<ExamSubmitted> = contract.get_exams_submitted_by_student(student);
+    assert(exams.len() == 1, 'EXAMS_COUNT_MISMATCH');
+    let exam0: ExamSubmitted = exams.at(0).clone();
+    assert(exam0.exam_id == 0_u256, 'EXAM0_ID_MISMATCH');
+    assert(exam0.student_address == student, 'EXAM0_STUDENT_MISMATCH');
+    assert(exam0.submit_timestamp == submit_time, 'EXAM0_SUBMIT_TIMESTAMP_MISMATCH');
+    assert(exam0.exam_uri == "123456", 'EXAM0_EXAM_URI_MISMATCH');
+    assert(exam0.exam_video == "123456", 'EXAM0_EXAM_VIDEO_MISMATCH');
+
+    let submits: Array<ExamSubmitted> = contract.get_all_submits_for_exam(0_u256);
+    assert(submits.len() == 1, 'SUBMITS_COUNT_MISMATCH');
+    let submit0: ExamSubmitted = submits.at(0).clone();
+    assert(submit0.exam_id == 0_u256, 'SUBMIT0_ID_MISMATCH');
+    assert(submit0.student_address == student, 'SUBMIT0_STUDENT_MISMATCH');
+    assert(submit0.submit_timestamp == submit_time, 'time stamp mismatch');
+    assert(submit0.exam_uri == "123456", 'SUBMIT0_EXAM_URI_MISMATCH');
+    assert(submit0.exam_video == "123456", 'SUBMIT0_EXAM_VIDEO_MISMATCH');
+}
+
+#[test]
+#[should_panic(expected: 'EXAM_NOT_FOUND')]
+fn test_submit_exam_should_panic_if_exam_doesnt_exist() {
+    let (contract, _, _) = deploy();
+    let contract_address = contract.contract_address;
+
+    contract.add_questions(10, 0_u256, "123456");
+
+    let student: ContractAddress = 12345.try_into().unwrap();
+    start_cheat_caller_address(contract_address, student);
+    contract.enroll_in_exam(0_u256);
+
+    let submit_time = get_block_timestamp();
+    contract.submit_exam(0_u256, "123456", "123456");
+
+    stop_cheat_caller_address(student);
+}
+
+#[test]
+#[should_panic(expected: 'STUDENT_NOT_ENROLLED')]
+fn test_submit_exam_should_panic_if_student_not_enrolled() {
+    let (contract, _, _) = deploy();
+    let contract_address = contract.contract_address;
+    let exam = contract.create_exam("Introduction Exams", 5, true, false, 0, 50);
+    let exam_data = contract.get_exam(exam.exam_id);
+
+    contract.add_questions(10, 0_u256, "123456");
+
+    let student: ContractAddress = 12345.try_into().unwrap();
+    start_cheat_caller_address(contract_address, student);
+
+    let submit_time = get_block_timestamp();
+    contract.submit_exam(0_u256, "123456", "123456");
+
+    stop_cheat_caller_address(student);
+}
+
+
+#[test]
+#[should_panic(expected: 'EXAM_ALREADY_SUBMITTED')]
+fn test_submit_exam_should_panic_if_double_submitting() {
+    let (contract, _, _) = deploy();
+    let contract_address = contract.contract_address;
+    let exam = contract.create_exam("Introduction Exams", 5, true, false, 0, 50);
+    let exam_data = contract.get_exam(exam.exam_id);
+
+    contract.add_questions(10, 0_u256, "123456");
+
+    let student: ContractAddress = 12345.try_into().unwrap();
+    start_cheat_caller_address(contract_address, student);
+    contract.enroll_in_exam(0_u256);
+
+    let submit_time = get_block_timestamp();
+    contract.submit_exam(0_u256, "123456", "123456");
+    contract.submit_exam(0_u256, "123456", "123456");
+
+    stop_cheat_caller_address(student);
+}
+
+
+#[test]
+#[should_panic(expected: 'EXAM_DURATION_EXPIRED')]
+fn test_submit_exam_should_panic_if_exam_duration_expired() {
+    let (contract, _, _) = deploy();
+    let contract_address = contract.contract_address;
+    let exam = contract.create_exam("Introduction Exams", 5, true, false, 0, 50);
+    let exam_data = contract.get_exam(exam.exam_id);
+
+    contract.add_questions(10, 0_u256, "123456");
+
+    let student: ContractAddress = 12345.try_into().unwrap();
+    start_cheat_caller_address(contract_address, student);
+    contract.enroll_in_exam(0_u256);
+
+    start_cheat_block_timestamp(contract_address, exam.duration + 1);
+    contract.submit_exam(0_u256, "123456", "123456");
+
+    stop_cheat_caller_address(student);
+}
